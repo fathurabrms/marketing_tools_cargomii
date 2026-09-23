@@ -1572,22 +1572,6 @@ function setupManualForm() {
             }
 
 
-            if (
-                prospectPhoneExists(phone)
-            ) {
-
-                showToast(
-                    "Nomor tersebut sudah ada di Data Saya.",
-                    "error"
-                );
-
-                phoneInput?.focus();
-
-                return;
-
-            }
-
-
             /* ------------------------------------------------
                REGION AUTO DETECT
             ------------------------------------------------ */
@@ -3107,9 +3091,11 @@ function setupExcelUpload() {
                 visibleRows.forEach(
                     item => {
 
-                        excelSelectedIds.add(
-                            item.id
-                        );
+                        if (!findDuplicateProspect(item)) {
+                            excelSelectedIds.add(
+                                item.id
+                            );
+                        }
 
                     }
                 );
@@ -3164,9 +3150,11 @@ function setupExcelUpload() {
                     visibleRows.forEach(
                         item => {
 
-                            excelSelectedIds.add(
-                                item.id
-                            );
+                            if (!findDuplicateProspect(item)) {
+                                excelSelectedIds.add(
+                                    item.id
+                                );
+                            }
 
                         }
                     );
@@ -3387,6 +3375,13 @@ function renderExcelPreview() {
                     item.id
                 );
 
+            const duplicateProspect =
+                findDuplicateProspect(item);
+
+            if (duplicateProspect) {
+                excelSelectedIds.delete(item.id);
+            }
+
 
             const tr =
                 document.createElement(
@@ -3394,8 +3389,9 @@ function renderExcelPreview() {
                 );
 
 
-            tr.className =
-                "border-b border-slate-100 hover:bg-slate-50/70 transition";
+            tr.className = duplicateProspect
+                ? "border-b border-red-100 bg-red-50/60"
+                : "border-b border-slate-100 hover:bg-slate-50/70 transition";
 
 
             tr.innerHTML = `
@@ -3410,7 +3406,9 @@ function renderExcelPreview() {
                             accent-blue-600
                         "
                         data-id="${escapeHTML(item.id)}"
-                        ${selected ? "checked" : ""}
+                        ${selected && !duplicateProspect ? "checked" : ""}
+                        ${duplicateProspect ? "disabled" : ""}
+                        title="${duplicateProspect ? "Data ini sudah ada di Data Saya" : "Pilih data"}"
                     >
 
                 </td>
@@ -3442,6 +3440,16 @@ function renderExcelPreview() {
                             item.company || "-"
                         )}
                     </p>
+
+                    ${
+                        duplicateProspect
+                            ? `
+                                <span class="inline-flex mt-1.5 px-2 py-1 rounded-md bg-red-100 text-red-600 text-[8px] font-bold">
+                                    Sudah ada di Data Saya
+                                </span>
+                              `
+                            : ""
+                    }
 
                     ${
                         item.region
@@ -3674,7 +3682,9 @@ function updateExcelCounters() {
     if (excelMasterCheckbox) {
 
         const visibleRows =
-            getFilteredExcelRows();
+            getFilteredExcelRows().filter(
+                item => !findDuplicateProspect(item)
+            );
 
 
         if (
@@ -3756,6 +3766,12 @@ function importSelectedExcelRows() {
                     item.phone
                 );
 
+            const region =
+                item.region ||
+                detectRegionFromAddress(
+                    item.address
+                );
+
 
             if (
                 !isValidMobilePhone(phone)
@@ -3769,9 +3785,11 @@ function importSelectedExcelRows() {
             ------------------------------------------------ */
 
             if (
-                prospectPhoneExists(
-                    phone
-                )
+                findDuplicateProspect({
+                    company: item.company,
+                    phone,
+                    region
+                })
             ) {
 
                 duplicate++;
@@ -3799,11 +3817,7 @@ function importSelectedExcelRows() {
 
                     phone,
 
-                    region:
-                        item.region ||
-                        detectRegionFromAddress(
-                            item.address
-                        ),
+                    region,
 
                     pic:
                         "",
@@ -4714,6 +4728,55 @@ function setupDataFilters() {
 
 
 /* ============================================================
+   FIND DUPLICATE PROSPECT
+
+   Prioritas pengecekan:
+   1. Nomor HP yang sama setelah dinormalisasi.
+   2. Nama perusahaan + wilayah yang sama.
+============================================================ */
+
+function normalizeDuplicateText(value) {
+
+    return cleanText(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
+}
+
+
+function findDuplicateProspect(data, ignoreId = null) {
+
+    const phone = normalizePhone(data?.phone);
+    const company = normalizeDuplicateText(data?.company);
+    const region = normalizeDuplicateText(data?.region);
+
+    return prospects.find(item => {
+
+        if (
+            ignoreId !== null &&
+            String(item.id) === String(ignoreId)
+        ) {
+            return false;
+        }
+
+        const samePhone =
+            phone &&
+            normalizePhone(item.phone) === phone;
+
+        const sameCompanyAndRegion =
+            company &&
+            region &&
+            normalizeDuplicateText(item.company) === company &&
+            normalizeDuplicateText(item.region) === region;
+
+        return samePhone || sameCompanyAndRegion;
+
+    }) || null;
+
+}
+
+
+/* ============================================================
    DATA TABLE BULK SELECTION
 ============================================================ */
 
@@ -4775,6 +4838,28 @@ function setupDataBulkActions() {
                 visibleIds.forEach(id => selectedDataIds.add(id));
             } else {
                 visibleIds.forEach(id => selectedDataIds.delete(id));
+            }
+
+
+            const duplicateProspect =
+                findDuplicateProspect({
+                    company,
+                    phone,
+                    region
+                });
+
+
+            if (duplicateProspect) {
+
+                showToast(
+                    `${duplicateProspect.company || "Data tersebut"} sudah ada di Data Saya.`,
+                    "error"
+                );
+
+                phoneInput?.focus();
+
+                return;
+
             }
 
             renderDataTable();
