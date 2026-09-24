@@ -1121,6 +1121,7 @@ function setupMarketingProfile() {
             saveMarketingProfile();
 
             renderMarketingProfile();
+            updateMessageTemplate();
 
             renderDashboard();
 
@@ -4841,27 +4842,6 @@ function setupDataBulkActions() {
             }
 
 
-            const duplicateProspect =
-                findDuplicateProspect({
-                    company,
-                    phone,
-                    region
-                });
-
-
-            if (duplicateProspect) {
-
-                showToast(
-                    `${duplicateProspect.company || "Data tersebut"} sudah ada di Data Saya.`,
-                    "error"
-                );
-
-                phoneInput?.focus();
-
-                return;
-
-            }
-
             renderDataTable();
 
         });
@@ -5732,159 +5712,22 @@ function getMarketingName() {
    MESSAGE TEMPLATE
 ============================================================ */
 
-function generateMessage(
-    templateName
-) {
+function generateMessage(templateName) {
+    if (templateName === "custom") return "";
 
-    const item =
-        getSelectedProspect();
-
-
-    const company =
-        item?.company ||
-        "Bapak/Ibu";
-
-
-    const marketingName =
-        getMarketingName();
-
-
-    switch (
-        templateName
-    ) {
-
-        /* ====================================================
-           INTRODUCTION
-        ==================================================== */
-
-        case "introduction":
-
-            return `Halo Bapak/Ibu dari ${company},
-
-Perkenalkan, saya ${marketingName} dari Cargomii.
-
-Kami menyediakan solusi cargo dan logistik untuk membantu kebutuhan pengiriman perusahaan ke berbagai wilayah Indonesia.
-
-Layanan kami mencakup pengiriman cargo darat, laut, udara, kapal PELNI, kendaraan, alat berat, serta kebutuhan logistik lainnya.
-
-Apabila perusahaan Bapak/Ibu memiliki kebutuhan pengiriman, kami siap membantu mengecek rute dan estimasi tarif.
-
-Apakah saat ini ada kebutuhan pengiriman yang dapat kami bantu?
-
-Terima kasih.
+    const marketingName = cleanText(marketingProfile.name) || "Nama Marketing";
+    const marketingPhone = normalizePhone(marketingProfile.phone) || "Nomor Marketing";
+    return `Cargomii via Kapal Cepat. Promo min 1Kg Sudah Bisa Kirim dan Diantar Sampai Alamat
+Tujuan :
+Jkt- Sorong Manokwari Jayapura
+tarif Rp 13.500/kg
+${marketingPhone}
+${marketingName}
+Cargomii
 
 Salam,
 ${marketingName}
 Cargomii`;
-
-
-        /* ====================================================
-           OFFERING
-        ==================================================== */
-
-        case "offering":
-
-            return `Halo Bapak/Ibu dari ${company},
-
-Saya ${marketingName} dari Cargomii.
-
-Kami ingin menawarkan layanan cargo dan logistik untuk kebutuhan pengiriman perusahaan Bapak/Ibu.
-
-Untuk mendapatkan estimasi pengiriman, Bapak/Ibu dapat menginformasikan:
-
-• Kota asal
-• Kota tujuan
-• Jenis barang
-• Berat / volume barang
-• Jumlah koli
-
-Tim kami akan membantu mengecek pilihan pengiriman dan estimasi tarif yang tersedia.
-
-Terima kasih.
-
-Salam,
-${marketingName}
-Cargomii`;
-
-
-        /* ====================================================
-           FOLLOW UP
-        ==================================================== */
-
-        case "followup":
-
-            return `Halo Bapak/Ibu dari ${company},
-
-Saya ${marketingName} dari Cargomii.
-
-Izin follow up kembali terkait layanan cargo dan logistik yang sebelumnya kami informasikan.
-
-Apabila saat ini ada kebutuhan pengiriman barang ke luar kota maupun antar pulau, kami siap membantu mengecek rute dan estimasi pengirimannya.
-
-Silakan informasikan kebutuhan pengiriman Bapak/Ibu apabila ada.
-
-Terima kasih.
-
-Salam,
-${marketingName}
-Cargomii`;
-
-
-        /* ====================================================
-           PRICE
-        ==================================================== */
-
-        case "price":
-
-            return `Halo Bapak/Ibu dari ${company},
-
-Saya ${marketingName} dari Cargomii.
-
-Untuk membantu pengecekan estimasi tarif pengiriman, silakan informasikan:
-
-• Kota asal:
-• Kota tujuan:
-• Jenis barang:
-• Berat:
-• Dimensi / volume:
-• Jumlah koli:
-
-Setelah datanya kami terima, tim Cargomii akan membantu mengecek estimasi tarif dan pilihan pengirimannya.
-
-Terima kasih.
-
-Salam,
-${marketingName}
-Cargomii`;
-
-
-        /* ====================================================
-           CUSTOM
-        ==================================================== */
-
-        case "custom":
-
-            return "";
-
-
-        default:
-
-            return `Halo Bapak/Ibu dari ${company},
-
-Perkenalkan, saya ${marketingName} dari Cargomii.
-
-Kami menyediakan layanan cargo dan logistik untuk kebutuhan pengiriman perusahaan.
-
-Apakah saat ini ada kebutuhan pengiriman yang dapat kami bantu?
-
-Terima kasih.
-
-Salam,
-${marketingName}
-Cargomii`;
-
-    }
-
 }
 
 
@@ -5901,7 +5744,7 @@ function updateMessageTemplate() {
 
     const template =
         templateSelect?.value ||
-        "introduction";
+        "kapal-cepat";
 
 
     /*
@@ -7625,7 +7468,71 @@ async function exportProspectsToExcel() {
    SETUP EXPORT
 ============================================================ */
 
+/* ============================================================
+   UNDUH KONTAK (VCF / vCard 3.0)
+============================================================ */
+
+function escapeVCardText(value) {
+    return String(value ?? "")
+        .replace(/\r\n|\r|\n/g, "\n")
+        .replace(/\\/g, "\\\\")
+        .replace(/;/g, "\\;")
+        .replace(/,/g, "\\,")
+        .replace(/\n/g, "\\n");
+}
+
+function exportContactsToVcf() {
+    const selected = selectedDataIds.size > 0;
+    const rows = selected
+        ? prospects.filter(item => selectedDataIds.has(String(item.id)))
+        : getFilteredProspects();
+    const seenPhones = new Set();
+    const cards = [];
+
+    for (const item of rows) {
+        const phone = normalizePhone(item.phone);
+        if (!isValidMobilePhone(phone) || seenPhones.has(phone)) continue;
+        seenPhones.add(phone);
+
+        const company = cleanText(item.company);
+        const pic = cleanText(item.pic);
+        const name = [pic, company].filter(Boolean).join(" - ") || phone;
+        const lines = [
+            "BEGIN:VCARD",
+            "VERSION:3.0",
+            `FN:${escapeVCardText(name)}`,
+            `N:${escapeVCardText(name)};;;;`,
+            `TEL;TYPE=CELL:+62${phone.slice(1)}`
+        ];
+        if (company) lines.push(`ORG:${escapeVCardText(company)}`);
+        if (item.region) lines.push(`ADR;TYPE=WORK:;;;${escapeVCardText(item.region)};;;`);
+        if (item.notes) lines.push(`NOTE:${escapeVCardText(item.notes)}`);
+        lines.push("END:VCARD");
+        cards.push(lines.join("\r\n"));
+    }
+
+    if (!cards.length) {
+        showToast("Tidak ada nomor HP valid untuk diunduh.", "error");
+        return;
+    }
+
+    const blob = new Blob([cards.join("\r\n") + "\r\n"], {
+        type: "text/vcard;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `Cargomii_Kontak_${new Date().toISOString().slice(0, 10)}.vcf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showToast(`${cards.length} kontak berhasil diunduh sebagai VCF.`);
+}
+
 function setupExport() {
+
+    el("exportVcfBtn")?.addEventListener("click", exportContactsToVcf);
 
     if (!exportBtn) {
         return;
