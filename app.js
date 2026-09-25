@@ -18,7 +18,8 @@
 
 const STORAGE_KEYS = {
     prospects: "cargomii_marketing_prospects_v3",
-    profile: "cargomii_marketing_profile_v3"
+    profile: "cargomii_marketing_profile_v3",
+    exportedVcfPhones: "cargomii_exported_vcf_phones_v1"
 };
 
 
@@ -1586,6 +1587,31 @@ function setupManualForm() {
 
             }
 
+
+            /* ------------------------------------------------
+               CEK DUPLIKAT SEBELUM MENYIMPAN
+            ------------------------------------------------ */
+
+            const duplicateProspect = findDuplicateProspect({
+                company,
+                phone,
+                region
+            });
+
+            if (duplicateProspect) {
+                const samePhone =
+                    normalizePhone(duplicateProspect.phone) === phone;
+
+                showToast(
+                    samePhone
+                        ? `Nomor ${phone} sudah ada di Data Saya (${duplicateProspect.company || "tanpa nama"}).`
+                        : `${company} di wilayah ${region} sudah ada di Data Saya.`,
+                    "error"
+                );
+
+                (samePhone ? phoneInput : companyInput)?.focus();
+                return;
+            }
 
             /* ------------------------------------------------
                CREATE
@@ -7481,18 +7507,33 @@ function escapeVCardText(value) {
         .replace(/\n/g, "\\n");
 }
 
-function exportContactsToVcf() {
-    const selected = selectedDataIds.size > 0;
-    const rows = selected
+function getExportedVcfPhones() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.exportedVcfPhones) || "[]");
+        return new Set(Array.isArray(saved) ? saved.filter(phone => isValidMobilePhone(phone)) : []);
+    } catch (error) {
+        console.error("Gagal membaca riwayat ekspor VCF:", error);
+        showToast("Riwayat ekspor VCF tidak bisa dibaca. Periksa data browser.", "error");
+        return null;
+    }
+}
+
+function exportContactsToVcf(includePreviouslyExported = false) {
+    const exportedPhones = getExportedVcfPhones();
+    if (!exportedPhones) return;
+
+    const rows = selectedDataIds.size > 0
         ? prospects.filter(item => selectedDataIds.has(String(item.id)))
         : getFilteredProspects();
     const seenPhones = new Set();
+    const exportedNow = [];
     const cards = [];
 
     for (const item of rows) {
         const phone = normalizePhone(item.phone);
         if (!isValidMobilePhone(phone) || seenPhones.has(phone)) continue;
         seenPhones.add(phone);
+        if (!includePreviouslyExported && exportedPhones.has(phone)) continue;
 
         const company = cleanText(item.company);
         const pic = cleanText(item.pic);
@@ -7509,10 +7550,16 @@ function exportContactsToVcf() {
         if (item.notes) lines.push(`NOTE:${escapeVCardText(item.notes)}`);
         lines.push("END:VCARD");
         cards.push(lines.join("\r\n"));
+        exportedNow.push(phone);
     }
 
     if (!cards.length) {
-        showToast("Tidak ada nomor HP valid untuk diunduh.", "error");
+        showToast(
+            includePreviouslyExported
+                ? "Tidak ada nomor HP valid untuk diunduh."
+                : "Tidak ada kontak baru. Nomor yang tampil sudah pernah masuk VCF.",
+            "error"
+        );
         return;
     }
 
@@ -7522,17 +7569,26 @@ function exportContactsToVcf() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `Cargomii_Kontak_${new Date().toISOString().slice(0, 10)}.vcf`;
+    anchor.download = `Cargomii_Kontak_${includePreviouslyExported ? "Semua" : "Baru"}_${new Date().toISOString().slice(0, 10)}.vcf`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    showToast(`${cards.length} kontak berhasil diunduh sebagai VCF.`);
+
+    try {
+        exportedNow.forEach(phone => exportedPhones.add(phone));
+        localStorage.setItem(STORAGE_KEYS.exportedVcfPhones, JSON.stringify([...exportedPhones]));
+        showToast(`${cards.length} kontak masuk file VCF. Impor file ke aplikasi Kontak.`);
+    } catch (error) {
+        console.error("Gagal menyimpan riwayat ekspor VCF:", error);
+        showToast("VCF diunduh, tetapi riwayat unduhan gagal disimpan di browser.", "error");
+    }
 }
 
 function setupExport() {
 
-    el("exportVcfBtn")?.addEventListener("click", exportContactsToVcf);
+    el("exportVcfBtn")?.addEventListener("click", () => exportContactsToVcf(false));
+    el("exportAllVcfBtn")?.addEventListener("click", () => exportContactsToVcf(true));
 
     if (!exportBtn) {
         return;
