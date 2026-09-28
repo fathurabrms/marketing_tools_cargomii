@@ -6644,6 +6644,11 @@ async function exportProspectsToExcel() {
             },
 
             {
+                key: "daerah",
+                width: 26
+            },
+
+            {
                 key: "tanggal",
                 width: 16
             },
@@ -6694,7 +6699,7 @@ async function exportProspectsToExcel() {
         ==================================================== */
 
         worksheet.mergeCells(
-            "A1:H1"
+            "A1:I1"
         );
 
 
@@ -6784,11 +6789,15 @@ async function exportProspectsToExcel() {
         );
 
         worksheet.mergeCells(
-            "E2:G2"
+            "E2:E3"
         );
 
         worksheet.mergeCells(
-            "H2:H3"
+            "F2:H2"
+        );
+
+        worksheet.mergeCells(
+            "I2:I3"
         );
 
 
@@ -6808,36 +6817,40 @@ async function exportProspectsToExcel() {
 
         worksheet.getCell(
             "C2"
+        ).value = "DAERAH";
+
+        worksheet.getCell(
+            "D2"
         ).value = "TANGGAL";
 
 
         worksheet.getCell(
-            "D2"
+            "E2"
         ).value = "NOMER WHATSAPP";
 
 
         worksheet.getCell(
-            "E2"
+            "F2"
         ).value = "FOLLOW UP";
 
 
         worksheet.getCell(
-            "E3"
+            "F3"
         ).value = "SMS";
 
 
         worksheet.getCell(
-            "F3"
+            "G3"
         ).value = "WA";
 
 
         worksheet.getCell(
-            "G3"
+            "H3"
         ).value = "CALL";
 
 
         worksheet.getCell(
-            "H2"
+            "I2"
         ).value = "KET";
 
 
@@ -6863,7 +6876,7 @@ async function exportProspectsToExcel() {
 
             for (
                 let columnNumber = 1;
-                columnNumber <= 8;
+                columnNumber <= 9;
                 columnNumber++
             ) {
 
@@ -6978,11 +6991,23 @@ async function exportProspectsToExcel() {
 
 
                 /* ============================================
-                   TANGGAL
+                   DAERAH (WILAYAH PROSPEK)
                 ============================================ */
 
                 row.getCell(
                     3
+                ).value =
+                    item.region ||
+                    detectRegionFromAddress(item.address || "") ||
+                    "-";
+
+
+                /* ============================================
+                   TANGGAL
+                ============================================ */
+
+                row.getCell(
+                    4
                 ).value =
                     getExportDate(
                         item
@@ -6990,7 +7015,7 @@ async function exportProspectsToExcel() {
 
 
                 row.getCell(
-                    3
+                    4
                 ).numFmt =
                     "dd/mm/yyyy";
 
@@ -7005,7 +7030,7 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 row.getCell(
-                    4
+                    5
                 ).value =
                     String(
                         item.phone ||
@@ -7014,7 +7039,7 @@ async function exportProspectsToExcel() {
 
 
                 row.getCell(
-                    4
+                    5
                 ).numFmt =
                     "@";
 
@@ -7024,7 +7049,7 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 row.getCell(
-                    5
+                    6
                 ).value =
                     activities.sms
                         ? "✓"
@@ -7036,7 +7061,7 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 row.getCell(
-                    6
+                    7
                 ).value =
                     activities.whatsapp
                         ? "✓"
@@ -7048,7 +7073,7 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 row.getCell(
-                    7
+                    8
                 ).value =
                     activities.call
                         ? "✓"
@@ -7060,7 +7085,7 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 row.getCell(
-                    8
+                    9
                 ).value =
                     getExportStatus(
                         item
@@ -7077,7 +7102,7 @@ async function exportProspectsToExcel() {
 
                 for (
                     let columnNumber = 1;
-                    columnNumber <= 8;
+                    columnNumber <= 9;
                     columnNumber++
                 ) {
 
@@ -7111,7 +7136,7 @@ async function exportProspectsToExcel() {
                         horizontal:
                             (
                                 columnNumber === 2 ||
-                                columnNumber === 8
+                                columnNumber === 9
                             )
                                 ? "left"
                                 : "center",
@@ -7159,9 +7184,9 @@ async function exportProspectsToExcel() {
                 ============================================ */
 
                 [
-                    5,
                     6,
-                    7
+                    7,
+                    8
                 ].forEach(
                     columnNumber => {
 
@@ -7205,7 +7230,7 @@ async function exportProspectsToExcel() {
 
                 const statusCell =
                     row.getCell(
-                        8
+                        9
                     );
 
 
@@ -7293,13 +7318,13 @@ async function exportProspectsToExcel() {
         /* ====================================================
            AUTO FILTER
 
-           Header kompleks E:G membuat filter lebih aman
+           Header kompleks F:H membuat filter lebih aman
            dimulai pada row 3.
         ==================================================== */
 
         worksheet.autoFilter = {
             from: "A3",
-            to: "H3"
+            to: "I3"
         };
 
 
@@ -7312,7 +7337,7 @@ async function exportProspectsToExcel() {
 
 
         worksheet.pageSetup.printArea =
-            `A1:H${lastRow}`;
+            `A1:I${lastRow}`;
 
 
         /* ====================================================
@@ -7859,8 +7884,3 @@ if (
 }
 
 
-/* ============================================================
-   END
-   CARGOMII MARKETING TOOL
-   APP.JS FULL 1 + 2 + 3
-============================================================ */
